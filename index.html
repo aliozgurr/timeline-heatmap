@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>İz Haritası</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%BA%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --ground: #eef2f8;
+    --surface: #ffffff;
+    --surface-2: #f4f7fb;
+    --text: #101826;
+    --text-muted: #55617a;
+    --accent: #0369a1;
+    --accent-soft: rgba(3, 105, 161, 0.12);
+    --border: #d7e0ec;
+    --shadow: 0 12px 32px rgba(20, 35, 60, 0.14);
+    --font-ui: 'Sora', ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0a1120;
+      --surface: #101a2e;
+      --surface-2: #16233b;
+      --text: #eaf0f9;
+      --text-muted: #8b9ab3;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.16);
+      --border: #263a5c;
+      --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0a1120;
+    --surface: #101a2e;
+    --surface-2: #16233b;
+    --text: #eaf0f9;
+    --text-muted: #8b9ab3;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.16);
+    --border: #263a5c;
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--font-ui);
+    overflow: hidden;
+  }
+  button, input { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #app { position: fixed; inset: 0; }
+  #map { position: absolute; inset: 0; background: var(--ground); }
+
+  .leaflet-control-zoom a { background: var(--surface); color: var(--text); border-color: var(--border) !important; }
+  .leaflet-control-zoom a:hover { background: var(--surface-2); }
+  .leaflet-control-attribution { background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--text-muted); }
+  .leaflet-control-attribution a { color: var(--text-muted); }
+
+  /* ---- Top bar ---- */
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 1001;
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 20px;
+    pointer-events: none;
+  }
+  #topbar .brand { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+  #topbar svg.mark { width: 26px; height: 26px; color: var(--accent); flex-shrink: 0; }
+  #topbar h1 { font-size: 16px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  #topbar .tagline { font-size: 12px; color: var(--text-muted); margin: 0; }
+
+  /* ---- Floating panel ---- */
+  #panel {
+    position: absolute; top: 16px; right: 16px; z-index: 1001;
+    width: 300px; max-width: calc(100vw - 32px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 14px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+  .section-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin: 0;
+  }
+
+  #dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 16px 12px;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  #dropzone.hover { border-color: var(--accent); background: var(--accent-soft); }
+  #dropzone svg { width: 22px; height: 22px; color: var(--text-muted); }
+  #dropzone p { margin: 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+  .btn {
+    appearance: none; border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--text); font-size: 13px; font-weight: 600; font-family: var(--font-ui);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+  .btn.primary:hover { opacity: 0.92; }
+  .btn.block { width: 100%; }
+  .btn.small { padding: 5px 10px; font-size: 12px; }
+
+  #fileError { font-size: 12px; color: #dc2626; margin: 0; display: none; }
+
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; }
+  .stat-row span:first-child { color: var(--text-muted); }
+  .stat-row .val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); }
+  .field-row b { color: var(--text); font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+  input[type="range"] {
+    -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px;
+    background: var(--border); outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent);
+  }
+  input[type="date"] {
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2);
+    color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 5px 6px; width: 100%;
+  }
+  .date-range { display: flex; gap: 8px; align-items: center; }
+  .date-range span { color: var(--text-muted); font-size: 11px; }
+
+  hr.sep { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  #privacyNote { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin: 0; }
+  #privacyNote b { color: var(--text); }
+
+  input[type="file"] { display: none; }
+
+  /* ---- Empty state ---- */
+  #emptyState {
+    position: absolute; inset: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  #emptyState .card {
+    pointer-events: auto;
+    width: min(440px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 32px 28px;
+    text-align: center;
+  }
+  #emptyState svg.big { width: 40px; height: 40px; color: var(--accent); margin-bottom: 14px; }
+  #emptyState h2 { font-size: 19px; margin: 0 0 8px; letter-spacing: -0.01em; text-wrap: balance; }
+  #emptyState p { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 18px; }
+  #emptyState.hidden { display: none; }
+  #emptyState .disclaimer {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-top: 16px; padding: 10px 12px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px;
+    text-align: left;
+  }
+  #emptyState .disclaimer svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--accent); }
+  #emptyState .disclaimer span { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+  #emptyState .howto {
+    margin-top: 18px; padding: 14px 16px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    text-align: left;
+  }
+  #emptyState .howto-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); margin: 0 0 10px;
+  }
+  #emptyState .howto ol {
+    margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px;
+  }
+  #emptyState .howto li { font-size: 12.5px; color: var(--text); line-height: 1.5; }
+  #emptyState .howto li b { color: var(--accent); font-weight: 600; }
+  #emptyState .howto-note { font-size: 11px; color: var(--text-muted); margin: 10px 0 0; line-height: 1.5; }
+
+  /* ---- Loading overlay ---- */
+  #loadingOverlay {
+    position: absolute; inset: 0; z-index: 1002;
+    display: none; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--ground) 70%, transparent);
+    backdrop-filter: blur(2px);
+  }
+  #loadingOverlay.show { display: flex; }
+  .spinner {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loadingOverlay .label { margin-top: 12px; font-size: 13px; color: var(--text-muted); }
+  #loadingOverlay .box { display: flex; flex-direction: column; align-items: center; }
+
+  /* ---- Legend ---- */
+  #legend {
+    position: absolute; left: 16px; bottom: 16px; z-index: 1001;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; box-shadow: var(--shadow);
+    display: none;
+  }
+  #legend.show { display: block; }
+  #legend .bar {
+    width: 140px; height: 8px; border-radius: 4px; margin-bottom: 4px;
+    background: linear-gradient(90deg, rgba(59,130,246,0) 0%, #3b82f6 22%, #22c55e 48%, #eab308 70%, #f97316 85%, #ef4444 100%);
+  }
+  #legend .labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  @media (max-width: 640px) {
+    #panel { top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-width: 100%; border-radius: 14px 14px 0 0; max-height: 62vh; }
+    #legend { bottom: calc(62vh + 12px); }
+    .leaflet-bottom.leaflet-right { bottom: calc(62vh + 12px) !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+
+  <div id="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/>
+        <circle cx="12" cy="9.5" r="2.4"/>
+      </svg>
+      <div>
+        <h1>İz Haritası</h1>
+        <p class="tagline">Konum geçmişinizi ısı haritası olarak görün</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div>
+      <p class="section-label">Veri İçe Aktar</p>
+      <div id="dropzone">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+        </svg>
+        <p>JSON dosyasını buraya sürükleyin</p>
+        <button class="btn small" id="browseBtn" type="button">Dosya Seç</button>
+        <input type="file" id="fileInput" accept=".json,application/json">
+      </div>
+      <p id="fileError"></p>
+    </div>
+
+    <div id="statsBlock" style="display:none;">
+      <hr class="sep">
+      <div style="display:flex; flex-direction:column; gap:6px; margin-top:12px;">
+        <div class="stat-row"><span>Nokta sayısı</span><span class="val" id="statCount">–</span></div>
+        <div class="stat-row"><span>Görünürdeki nokta</span><span class="val" id="statVisible">–</span></div>
+        <div class="stat-row"><span>Tarih aralığı</span><span class="val" id="statRange">–</span></div>
+      </div>
+    </div>
+
+    <div id="filterBlock" style="display:none;">
+      <hr class="sep">
+      <p class="section-label" style="margin-top:12px;">Tarih Filtresi</p>
+      <div class="date-range">
+        <input type="date" id="dateFrom">
+        <span>–</span>
+        <input type="date" id="dateTo">
+      </div>
+    </div>
+
+    <div id="controlsBlock" style="display:none;">
+      <hr class="sep">
+      <p class="section-label" style="margin-top:12px;">Görünüm</p>
+      <div class="field">
+        <div class="field-row"><span>Yarıçap</span><b id="radiusVal">18px</b></div>
+        <input type="range" id="radius" min="4" max="40" value="18">
+      </div>
+      <div class="field">
+        <div class="field-row"><span>Bulanıklık</span><b id="blurVal">22px</b></div>
+        <input type="range" id="blur" min="0" max="50" value="22">
+      </div>
+      <div class="field">
+        <div class="field-row"><span>Yoğunluk eşiği</span><b id="maxVal">1.5</b></div>
+        <input type="range" id="maxi" min="0.1" max="5" step="0.1" value="1.5">
+      </div>
+      <button class="btn block" id="fitBtn" type="button">Verilere Odaklan</button>
+    </div>
+
+    <hr class="sep">
+    <p id="privacyNote"><b>Gizlilik:</b> Dosyanız yalnızca tarayıcınızda, anlık olarak işlenir; hiçbir veri sunucuya gönderilmez, kaydedilmez veya saklanmaz.</p>
+  </div>
+
+  <div id="emptyState">
+    <div class="card">
+      <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/>
+        <circle cx="12" cy="9.5" r="2.4"/>
+      </svg>
+      <h2>Google Timeline verinizi içe aktarın</h2>
+      <p>JSON dosyasını buraya sürükleyip bırakın veya seçin.</p>
+      <button class="btn primary block" id="emptyBrowseBtn" type="button">Dosya Seç</button>
+      <div class="howto">
+        <p class="howto-title">Dosyayı telefonunuzdan nasıl alırsınız?</p>
+        <ol>
+          <li>Telefonunuzda <b>Google Haritalar</b> uygulamasını açın</li>
+          <li>Sağ üstteki profil fotoğrafına dokunun</li>
+          <li><b>Ayarlar</b> &rarr; <b>Konum ve gizlilik</b>'e girin</li>
+          <li><b>Zaman Çizelgesi verilerini dışa aktar</b> seçeneğine dokunun</li>
+          <li>İnen JSON dosyasını buraya sürükleyin veya seçin</li>
+        </ol>
+        <p class="howto-note">Eski Google Takeout dışa aktarımları da desteklenir.</p>
+      </div>
+      <div class="disclaimer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="10.5" width="16" height="10" rx="2"/>
+          <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>
+        </svg>
+        <span>Dosyanız yalnızca bu cihazda, tarayıcınızda anlık olarak işlenir. Hiçbir sunucuya gönderilmez, kaydedilmez veya saklanmaz.</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay">
+    <div class="box">
+      <div class="spinner"></div>
+      <div class="label">İçe aktarılıyor…</div>
+    </div>
+  </div>
+
+  <div id="legend">
+    <div class="bar"></div>
+    <div class="labels"><span>az</span><span>çok</span></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------
+  // Map
+  // ---------------------------------------------------------------
+  var map = L.map('map', { preferCanvas: true, zoomControl: false }).setView([25, 20], 2);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap katkıda bulunanlar'
+  }).addTo(map);
+
+  // Background map is just visual scaffolding until data is imported —
+  // keep it fixed so it doesn't invite panning/zooming before there's
+  // anything to look at.
+  map.dragging.disable();
+  map.scrollWheelZoom.disable();
+  map.doubleClickZoom.disable();
+  map.touchZoom.disable();
+  map.boxZoom.disable();
+  map.keyboard.disable();
+  document.querySelector('.leaflet-control-zoom').style.display = 'none';
+
+  function enableMapInteraction() {
+    map.dragging.enable();
+    map.scrollWheelZoom.enable();
+    map.doubleClickZoom.enable();
+    map.touchZoom.enable();
+    map.boxZoom.enable();
+    map.keyboard.enable();
+    document.querySelector('.leaflet-control-zoom').style.display = '';
+  }
+
+  var HEAT_GRADIENT = { 0.2: '#3b82f6', 0.4: '#22c55e', 0.6: '#eab308', 0.8: '#f97316', 1.0: '#ef4444' };
+  var heatLayer = null;
+
+  // ---------------------------------------------------------------
+  // Parsing: supports the new semanticSegments export, the classic
+  // Records.json export, and the older Semantic Location History export.
+  // ---------------------------------------------------------------
+  function parseGeoString(s) {
+    if (!s) return null;
+    var m = /geo:(-?\d+\.?\d*),(-?\d+\.?\d*)/.exec(s);
+    if (!m) return null;
+    return [parseFloat(m[1]), parseFloat(m[2])];
+  }
+
+  function extractPoints(json) {
+    var points = [];
+    function addPoint(lat, lon, dateVal) {
+      if (typeof lat !== 'number' || typeof lon !== 'number') return;
+      if (isNaN(lat) || isNaN(lon)) return;
+      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+      if (lat === 0 && lon === 0) return;
+      var t = null;
+      if (dateVal !== undefined && dateVal !== null) {
+        var d = (typeof dateVal === 'number') ? new Date(dateVal) : new Date(dateVal);
+        if (!isNaN(d.getTime())) t = d;
+      }
+      points.push({ lat: lat, lon: lon, t: t });
+    }
+
+    if (Array.isArray(json)) {
+      for (var i = 0; i < json.length; i++) {
+        var item = json[i];
+        var startTime = item.startTime, endTime = item.endTime;
+        if (item.visit && item.visit.topCandidate && item.visit.topCandidate.placeLocation) {
+          var p1 = parseGeoString(item.visit.topCandidate.placeLocation);
+          if (p1) addPoint(p1[0], p1[1], startTime);
+        }
+        if (Array.isArray(item.timelinePath)) {
+          for (var j = 0; j < item.timelinePath.length; j++) {
+            var p2 = parseGeoString(item.timelinePath[j].point || '');
+            if (p2) addPoint(p2[0], p2[1], startTime);
+          }
+        }
+        if (item.activity) {
+          var act = item.activity;
+          if (act.start) { var p3 = parseGeoString(act.start); if (p3) addPoint(p3[0], p3[1], startTime); }
+          if (act.end) { var p4 = parseGeoString(act.end); if (p4) addPoint(p4[0], p4[1], endTime || startTime); }
+        }
+      }
+    } else if (json && Array.isArray(json.locations)) {
+      for (var k = 0; k < json.locations.length; k++) {
+        var loc = json.locations[k];
+        var ts = loc.timestamp !== undefined ? loc.timestamp : loc.timestampMs;
+        if (typeof loc.latitudeE7 === 'number' && typeof loc.longitudeE7 === 'number') {
+          addPoint(loc.latitudeE7 / 1e7, loc.longitudeE7 / 1e7, ts);
+        } else if (typeof loc.latE7 === 'number' && typeof loc.lngE7 === 'number') {
+          addPoint(loc.latE7 / 1e7, loc.lngE7 / 1e7, ts);
+        }
+      }
+    } else if (json && Array.isArray(json.timelineObjects)) {
+      for (var m2 = 0; m2 < json.timelineObjects.length; m2++) {
+        var obj = json.timelineObjects[m2];
+        if (obj.placeVisit) {
+          var pv = obj.placeVisit;
+          var pvLoc = pv.location;
+          var pvStart = pv.duration && pv.duration.startTimestamp;
+          if (pvLoc && typeof pvLoc.latitudeE7 === 'number') {
+            addPoint(pvLoc.latitudeE7 / 1e7, pvLoc.longitudeE7 / 1e7, pvStart);
+          }
+        }
+        if (obj.activitySegment) {
+          var as = obj.activitySegment;
+          var asStart = as.duration && as.duration.startTimestamp;
+          var asEnd = as.duration && as.duration.endTimestamp;
+          if (as.startLocation && typeof as.startLocation.latitudeE7 === 'number') {
+            addPoint(as.startLocation.latitudeE7 / 1e7, as.startLocation.longitudeE7 / 1e7, asStart);
+          }
+          if (as.endLocation && typeof as.endLocation.latitudeE7 === 'number') {
+            addPoint(as.endLocation.latitudeE7 / 1e7, as.endLocation.longitudeE7 / 1e7, asEnd);
+          }
+          if (as.waypointPath && Array.isArray(as.waypointPath.waypoints)) {
+            for (var w = 0; w < as.waypointPath.waypoints.length; w++) {
+              var wp = as.waypointPath.waypoints[w];
+              if (typeof wp.latE7 === 'number') addPoint(wp.latE7 / 1e7, wp.lngE7 / 1e7, asStart);
+            }
+          }
+        }
+      }
+    }
+    return points;
+  }
+
+  // ---------------------------------------------------------------
+  // App state / wiring
+  // ---------------------------------------------------------------
+  var allPoints = [];       // {lat,lon,t}
+  var currentFiltered = [];
+  var pendingFrame = null;
+
+  var radiusInput = document.getElementById('radius');
+  var blurInput = document.getElementById('blur');
+  var maxInput = document.getElementById('maxi');
+
+  function renderHeat(points) {
+    var latlngs = points.map(function (p) { return [p.lat, p.lon]; });
+    var radius = parseInt(radiusInput.value, 10);
+    var blur = parseInt(blurInput.value, 10);
+    var maxi = parseFloat(maxInput.value);
+    if (heatLayer) map.removeLayer(heatLayer);
+    heatLayer = L.heatLayer(latlngs, { radius: radius, blur: blur, maxZoom: 12, max: maxi, gradient: HEAT_GRADIENT }).addTo(map);
+    document.getElementById('statVisible').textContent = points.length.toLocaleString('tr-TR');
+  }
+
+  function scheduleRender() {
+    if (pendingFrame) return;
+    pendingFrame = requestAnimationFrame(function () {
+      pendingFrame = null;
+      renderHeat(currentFiltered);
+    });
+  }
+
+  radiusInput.addEventListener('input', function () {
+    document.getElementById('radiusVal').textContent = radiusInput.value + 'px';
+    scheduleRender();
+  });
+  blurInput.addEventListener('input', function () {
+    document.getElementById('blurVal').textContent = blurInput.value + 'px';
+    scheduleRender();
+  });
+  maxInput.addEventListener('input', function () {
+    document.getElementById('maxVal').textContent = parseFloat(maxInput.value).toFixed(1);
+    scheduleRender();
+  });
+  document.getElementById('fitBtn').addEventListener('click', function () {
+    if (!currentFiltered.length) return;
+    map.fitBounds(L.latLngBounds(currentFiltered.map(function (p) { return [p.lat, p.lon]; })), { padding: [30, 30] });
+  });
+
+  var dateFrom = document.getElementById('dateFrom');
+  var dateTo = document.getElementById('dateTo');
+  function applyDateFilter() {
+    var from = dateFrom.value ? new Date(dateFrom.value + 'T00:00:00') : null;
+    var to = dateTo.value ? new Date(dateTo.value + 'T23:59:59') : null;
+    currentFiltered = allPoints.filter(function (p) {
+      if (!p.t) return true;
+      if (from && p.t < from) return false;
+      if (to && p.t > to) return false;
+      return true;
+    });
+    scheduleRender();
+  }
+  dateFrom.addEventListener('change', applyDateFilter);
+  dateTo.addEventListener('change', applyDateFilter);
+
+  function fmtDate(d) {
+    return d.toLocaleDateString('tr-TR', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function handleFile(file) {
+    var errorEl = document.getElementById('fileError');
+    errorEl.style.display = 'none';
+    if (!file) return;
+    document.getElementById('loadingOverlay').classList.add('show');
+    var reader = new FileReader();
+    reader.onload = function () {
+      requestAnimationFrame(function () {
+        setTimeout(function () {
+          try {
+            var json = JSON.parse(reader.result);
+            var raw = extractPoints(json);
+            if (!raw.length) {
+              throw new Error('Bu dosyada tanınabilir konum verisi bulunamadı.');
+            }
+            allPoints = raw;
+            currentFiltered = allPoints;
+
+            var dated = allPoints.filter(function (p) { return p.t; }).map(function (p) { return p.t; });
+            document.getElementById('statCount').textContent = allPoints.length.toLocaleString('tr-TR');
+            document.getElementById('statVisible').textContent = allPoints.length.toLocaleString('tr-TR');
+            if (dated.length) {
+              var minD = new Date(Math.min.apply(null, dated));
+              var maxD = new Date(Math.max.apply(null, dated));
+              document.getElementById('statRange').textContent = fmtDate(minD) + ' – ' + fmtDate(maxD);
+              dateFrom.min = dateTo.min = minD.toISOString().slice(0, 10);
+              dateFrom.max = dateTo.max = maxD.toISOString().slice(0, 10);
+              dateFrom.value = minD.toISOString().slice(0, 10);
+              dateTo.value = maxD.toISOString().slice(0, 10);
+              document.getElementById('filterBlock').style.display = 'block';
+            } else {
+              document.getElementById('statRange').textContent = 'bilinmiyor';
+              document.getElementById('filterBlock').style.display = 'none';
+            }
+
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('statsBlock').style.display = 'block';
+            document.getElementById('controlsBlock').style.display = 'block';
+            document.getElementById('legend').classList.add('show');
+
+            enableMapInteraction();
+            map.fitBounds(L.latLngBounds(currentFiltered.map(function (p) { return [p.lat, p.lon]; })), { padding: [30, 30] });
+            renderHeat(currentFiltered);
+          } catch (err) {
+            errorEl.textContent = 'Dosya okunamadı: ' + err.message;
+            errorEl.style.display = 'block';
+          } finally {
+            document.getElementById('loadingOverlay').classList.remove('show');
+          }
+        }, 30);
+      });
+    };
+    reader.onerror = function () {
+      document.getElementById('loadingOverlay').classList.remove('show');
+      errorEl.textContent = 'Dosya okunamadı.';
+      errorEl.style.display = 'block';
+    };
+    reader.readAsText(file);
+  }
+
+  var fileInput = document.getElementById('fileInput');
+  document.getElementById('browseBtn').addEventListener('click', function () { fileInput.click(); });
+  document.getElementById('emptyBrowseBtn').addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function () { handleFile(fileInput.files[0]); });
+
+  var dropzone = document.getElementById('dropzone');
+  var mapEl = document.getElementById('map');
+  ['dragenter', 'dragover'].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('hover'); });
+    mapEl.addEventListener(evt, function (e) { e.preventDefault(); });
+  });
+  ['dragleave', 'drop'].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) { e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('hover'); });
+  });
+  dropzone.addEventListener('drop', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+  mapEl.addEventListener('drop', function (e) {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+})();
+</script>
+</body>
+</html>
