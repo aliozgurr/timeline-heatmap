@@ -569,8 +569,11 @@
             document.getElementById('statCount').textContent = allPoints.length.toLocaleString('tr-TR');
             document.getElementById('statVisible').textContent = allPoints.length.toLocaleString('tr-TR');
             if (dated.length) {
-              var minD = new Date(Math.min.apply(null, dated));
-              var maxD = new Date(Math.max.apply(null, dated));
+              var minD = dated[0], maxD = dated[0];
+              for (var di = 1; di < dated.length; di++) {
+                if (dated[di] < minD) minD = dated[di];
+                if (dated[di] > maxD) maxD = dated[di];
+              }
               document.getElementById('statRange').textContent = fmtDate(minD) + ' – ' + fmtDate(maxD);
               dateFrom.min = dateTo.min = minD.toISOString().slice(0, 10);
               dateFrom.max = dateTo.max = maxD.toISOString().slice(0, 10);
