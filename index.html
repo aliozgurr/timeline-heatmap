@@ -99,6 +99,20 @@
     letter-spacing: 0.06em; color: var(--text-muted); margin: 0;
   }
 
+  .panel-handle {
+    display: none;
+    width: 100%;
+    flex-direction: column; align-items: center; gap: 6px;
+    background: none; border: none; cursor: pointer;
+    padding: 10px 16px 8px;
+    font-family: var(--font-ui);
+  }
+  .panel-handle .handle-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--border); }
+  .panel-handle .handle-row { width: 100%; display: flex; align-items: center; justify-content: space-between; }
+  .panel-handle .handle-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .panel-handle .chev { width: 18px; height: 18px; color: var(--text-muted); flex-shrink: 0; transition: transform 0.2s ease; }
+  #panel.expanded .panel-handle .chev { transform: rotate(180deg); }
+
   #dropzone {
     border: 1.5px dashed var(--border);
     border-radius: 10px;
@@ -231,9 +245,16 @@
   #legend .labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
 
   @media (max-width: 640px) {
-    #panel { top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-width: 100%; border-radius: 14px 14px 0 0; max-height: 62vh; }
-    #legend { bottom: calc(62vh + 12px); }
-    .leaflet-bottom.leaflet-right { bottom: calc(62vh + 12px) !important; }
+    #panel {
+      top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-width: 100%;
+      border-radius: 16px 16px 0 0; padding: 0; gap: 0;
+      max-height: 72vh;
+    }
+    .panel-handle { display: flex; }
+    #panel .panel-body { display: none; padding: 0 16px 16px; }
+    #panel.expanded .panel-body { display: flex; flex-direction: column; gap: 14px; }
+    #legend, .leaflet-bottom.leaflet-right { bottom: 68px !important; }
+    #app.panel-expanded #legend, #app.panel-expanded .leaflet-bottom.leaflet-right { bottom: calc(72vh + 12px) !important; }
   }
 </style>
 </head>
@@ -255,6 +276,14 @@
   </div>
 
   <div id="panel">
+    <button class="panel-handle" id="panelToggle" type="button" aria-expanded="false" aria-controls="panelBody">
+      <span class="handle-grip"></span>
+      <span class="handle-row">
+        <span class="handle-label" id="handleLabel">İçe aktarmak için dokunun</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </span>
+    </button>
+    <div class="panel-body" id="panelBody">
     <div>
       <p class="section-label">Veri İçe Aktar</p>
       <div id="dropzone">
@@ -307,6 +336,7 @@
 
     <hr class="sep">
     <p id="privacyNote"><b>Gizlilik:</b> Dosyanız yalnızca tarayıcınızda, anlık olarak işlenir; hiçbir veri sunucuya gönderilmez, kaydedilmez veya saklanmaz.</p>
+    </div>
   </div>
 
   <div id="emptyState">
@@ -527,6 +557,24 @@
     map.fitBounds(L.latLngBounds(currentFiltered.map(function (p) { return [p.lat, p.lon]; })), { padding: [30, 30] });
   });
 
+  // ---------------------------------------------------------------
+  // Collapsible panel (mobile bottom sheet) — collapsed by default so
+  // the map stays reachable; a bottom handle bar opens/closes it.
+  // ---------------------------------------------------------------
+  var appEl = document.getElementById('app');
+  var panelEl = document.getElementById('panel');
+  var panelToggle = document.getElementById('panelToggle');
+  var handleLabel = document.getElementById('handleLabel');
+
+  function setPanelExpanded(expanded) {
+    panelEl.classList.toggle('expanded', expanded);
+    appEl.classList.toggle('panel-expanded', expanded);
+    panelToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+  panelToggle.addEventListener('click', function () {
+    setPanelExpanded(!panelEl.classList.contains('expanded'));
+  });
+
   var dateFrom = document.getElementById('dateFrom');
   var dateTo = document.getElementById('dateTo');
   function applyDateFilter() {
@@ -538,6 +586,7 @@
       if (to && p.t > to) return false;
       return true;
     });
+    handleLabel.textContent = currentFiltered.length.toLocaleString('tr-TR') + ' nokta · Kontroller';
     scheduleRender();
   }
   dateFrom.addEventListener('change', applyDateFilter);
@@ -589,6 +638,8 @@
             document.getElementById('statsBlock').style.display = 'block';
             document.getElementById('controlsBlock').style.display = 'block';
             document.getElementById('legend').classList.add('show');
+            handleLabel.textContent = allPoints.length.toLocaleString('tr-TR') + ' nokta · Kontroller';
+            setPanelExpanded(false);
 
             enableMapInteraction();
             map.fitBounds(L.latLngBounds(currentFiltered.map(function (p) { return [p.lat, p.lon]; })), { padding: [30, 30] });
